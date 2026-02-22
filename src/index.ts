@@ -1,9 +1,31 @@
 export * from './types';
-export * from './IdentityIntegrationLayer';
 export * from './AuthorityGraphBuilder';
-export * from './DelegationControlModule';
 export * from './ApprovalRoutingEngine';
 export * from './ApprovalRoutingTypes';
+export {
+    IdentityIntegrationLayer,
+    IdentityClaimSet,
+    IdentityContextRecord,
+    IdentityRole,
+    DepartmentNode,
+    IdentityUserProfile,
+    IdentityIntegrationLayerOptions,
+    SSOAdapter,
+    DirectoryAdapter,
+    RBACAdapter,
+    PermissionScope as IdentityPermissionScope
+} from './IdentityIntegrationLayer';
+export {
+    DelegationControlModule,
+    DelegationScopeBoundary,
+    DelegationContextRestriction,
+    DelegationCapability,
+    DelegationRecord,
+    DelegationAuditEventType,
+    DelegationAuditEvent,
+    DelegationControlModuleOptions,
+    DelegationRequest as DelegationControlRequest
+} from './DelegationControlModule';
 export { OrganizationalGraphEngine } from './OrganizationalGraphEngine';
 export {
     EntityType,
