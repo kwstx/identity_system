@@ -12,8 +12,12 @@ async function runValidationDemo() {
     orgGraph.addNode({ id: 'dept_engineering', type: EntityType.DEPARTMENT, name: 'Engineering' });
     orgGraph.addNode({ id: 'dept_finance', type: EntityType.DEPARTMENT, name: 'Finance' });
 
-    orgGraph.addNode({ id: 'user_cto', type: EntityType.USER, name: 'CTO' });
+    orgGraph.addNode({ id: 'agent_001', type: EntityType.AGENT, name: 'Agent 1' });
     orgGraph.addNode({ id: 'user_cfo', type: EntityType.USER, name: 'CFO' });
+    orgGraph.addRelationship({ fromId: 'agent_001', toId: 'dept_engineering', type: RelationshipType.MEMBER_OF });
+
+    orgGraph.addNode({ id: 'res_owner_finance', type: EntityType.USER, name: 'Finance Data Owner' });
+    orgGraph.addRelationship({ fromId: 'res_owner_finance', toId: 'dept_finance', type: RelationshipType.MEMBER_OF });
 
     // CFO approves for Finance
     orgGraph.addRelationship({
@@ -96,7 +100,7 @@ async function runValidationDemo() {
                 agentId: 'agent_001',
                 action: 'read',
                 resource: 'finance.records',
-                resourceOwnerId: 'dept_finance',
+                resourceOwnerId: 'res_owner_finance',
                 context: { environment: 'development', timestamp: Date.now() }
             }
         },

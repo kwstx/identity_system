@@ -56,13 +56,19 @@ export class OrganizationalGraphEngine {
      */
     public getDepartmentLineage(entityId: string): string[] {
         const lineage: string[] = [];
-        let current: string | undefined = entityId;
+        let current: string | undefined;
 
-        // First find the direct department
-        const directDept = this.outEdges.get(entityId)?.find(r => r.type === RelationshipType.MEMBER_OF)?.toId;
-        if (!directDept) return [];
+        // If the entity itself is a department, start from it directly.
+        const entityNode = this.nodes.get(entityId);
+        if (entityNode?.type === EntityType.DEPARTMENT) {
+            current = entityId;
+        } else {
+            // Otherwise resolve the direct department membership first.
+            const directDept = this.outEdges.get(entityId)?.find(r => r.type === RelationshipType.MEMBER_OF)?.toId;
+            if (!directDept) return [];
+            current = directDept;
+        }
 
-        current = directDept;
         const seen = new Set<string>();
         while (current && !seen.has(current)) {
             seen.add(current);

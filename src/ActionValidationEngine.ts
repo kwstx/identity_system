@@ -56,13 +56,9 @@ export class ActionValidationEngine {
         }
 
         // 3. Delegation Legitimacy
-        // Check if the rule comes from a delegation and if that delegation is valid in current context
+        // Check if the rule comes from a delegation
         const delegationSources = rule?.sources.filter(s => s.startsWith('delegation:')) ?? [];
-        if (delegationSources.length > 0) {
-            // In a real system, we might want to re-verify the delegation record itself
-            // but for now, we trust the AuthorityGraph was built correctly.
-            // We can add a metadata check if needed.
-        }
+        const isDelegated = delegationSources.length > 0;
 
         // 4. Organizational Context Alignment
         this.evaluateContextAlignment(action, authorityGraph, violations);
@@ -73,6 +69,7 @@ export class ActionValidationEngine {
             authorized,
             violations,
             requiredApprovals: [...new Set(requiredApprovals)],
+            isDelegated,
             traceId
         };
     }

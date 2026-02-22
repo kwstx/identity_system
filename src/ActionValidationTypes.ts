@@ -21,5 +21,6 @@ export interface ValidationResult {
     authorized: boolean;
     violations: ValidationViolation[];
     requiredApprovals: string[];
+    isDelegated: boolean;
     traceId: string;
 }
