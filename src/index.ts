@@ -41,7 +41,12 @@ export * from './VerificationProtocolTypes';
 export { AuthorityVerificationProtocol } from './AuthorityVerificationProtocol';
 export { CryptoUtils } from './crypto';
 export * from './ActionValidationTypes';
-export { ActionValidationEngine } from './ActionValidationEngine';
+export {
+    ActionValidationEngine,
+    ActionValidationEngineOptions,
+    ValidateActionOptions
+} from './ActionValidationEngine';
+export * from './AuditTraceEngine';
 export {
     SecurityEnforcementLayer,
     EnforcementResult,

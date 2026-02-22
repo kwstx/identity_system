@@ -6,16 +6,24 @@ import {
 import { AuthorityGraph, AuthorityRule } from './AuthorityGraphBuilder';
 import { OrganizationalGraphEngine } from './OrganizationalGraphEngine';
 import { v4 as uuidv4 } from 'uuid';
+import { AuditTraceEngine } from './AuditTraceEngine';
 
 export interface ActionValidationEngineOptions {
     orgGraph: OrganizationalGraphEngine;
+    auditTraceEngine?: AuditTraceEngine;
+}
+
+export interface ValidateActionOptions {
+    traceId?: string;
 }
 
 export class ActionValidationEngine {
     private orgGraph: OrganizationalGraphEngine;
+    private readonly auditTraceEngine?: AuditTraceEngine;
 
     constructor(options: ActionValidationEngineOptions) {
         this.orgGraph = options.orgGraph;
+        this.auditTraceEngine = options.auditTraceEngine;
     }
 
     /**
@@ -23,9 +31,10 @@ export class ActionValidationEngine {
      */
     public validateAction(
         action: AgentAction,
-        authorityGraph: AuthorityGraph
+        authorityGraph: AuthorityGraph,
+        options: ValidateActionOptions = {}
     ): ValidationResult {
-        const traceId = uuidv4();
+        const traceId = options.traceId ?? uuidv4();
         const violations: ValidationViolation[] = [];
         const requiredApprovals: string[] = [];
 
@@ -64,11 +73,49 @@ export class ActionValidationEngine {
         this.evaluateContextAlignment(action, authorityGraph, violations);
 
         const authorized = violations.every(v => v.severity !== 'error');
+        const normalizedRequiredApprovals = [...new Set(requiredApprovals)];
+
+        this.auditTraceEngine?.startTrace({
+            traceId,
+            metadata: {
+                agentId: action.agentId,
+                action: action.action,
+                resource: action.resource
+            }
+        });
+        this.auditTraceEngine?.recordEvent({
+            traceId,
+            domain: 'authority_check',
+            type: 'authority_check_result',
+            actorId: action.agentId,
+            subjectId: action.agentId,
+            decision: !rule || rule.decision === 'prohibited'
+                ? 'deny'
+                : rule.decision === 'requires_approval'
+                    ? 'requires_approval'
+                    : 'allow',
+            complianceTags: ['authority', 'validation'],
+            details: {
+                rule: rule
+                    ? {
+                        resource: rule.resource,
+                        action: rule.action,
+                        decision: rule.decision,
+                        reasons: rule.reasons,
+                        sources: rule.sources
+                    }
+                    : undefined,
+                authorized,
+                isDelegated,
+                violations: violations.map((violation) => ({ ...violation })),
+                requiredApprovals: normalizedRequiredApprovals
+            }
+        });
 
         return {
             authorized,
             violations,
-            requiredApprovals: [...new Set(requiredApprovals)],
+            requiredApprovals: normalizedRequiredApprovals,
             isDelegated,
             traceId
         };

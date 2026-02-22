@@ -4,6 +4,7 @@ import { ActionValidationEngine } from './ActionValidationEngine';
 import { AuthorityVerificationProtocol } from './AuthorityVerificationProtocol';
 import { AuthorityGraph } from './AuthorityGraphBuilder';
 import { v4 as uuidv4 } from 'uuid';
+import { AuditTraceEngine } from './AuditTraceEngine';
 
 export interface EnforcementResult {
     allowed: boolean;
@@ -24,6 +25,7 @@ export interface SecurityEnforcementOptions {
     validationEngine: ActionValidationEngine;
     trustedRootPublicKeys: string[];
     enableAuditLogging?: boolean;
+    auditTraceEngine?: AuditTraceEngine;
 }
 
 export class SecurityEnforcementLayer {
@@ -31,11 +33,13 @@ export class SecurityEnforcementLayer {
     private trustedRootPublicKeys: string[];
     private auditLogs: any[] = [];
     private enableAuditLogging: boolean;
+    private readonly auditTraceEngine?: AuditTraceEngine;
 
     constructor(options: SecurityEnforcementOptions) {
         this.validationEngine = options.validationEngine;
         this.trustedRootPublicKeys = options.trustedRootPublicKeys;
         this.enableAuditLogging = options.enableAuditLogging ?? true;
+        this.auditTraceEngine = options.auditTraceEngine;
     }
 
     /**
@@ -51,12 +55,34 @@ export class SecurityEnforcementLayer {
         const traceId = uuidv4();
         const timestamp = Date.now();
         const anomalies: EnforcementAnomaly[] = [];
+        this.auditTraceEngine?.startTrace({
+            traceId,
+            metadata: {
+                agentId: action.agentId,
+                action: action.action,
+                resource: action.resource
+            }
+        });
 
         // 1. Verify Identity Token & Authority Pathway
         const verificationResult = AuthorityVerificationProtocol.verifyPortableToken(
             token,
             this.trustedRootPublicKeys
         );
+        this.auditTraceEngine?.recordEvent({
+            traceId,
+            domain: 'enforcement_decision',
+            type: 'token_verification',
+            actorId: action.agentId,
+            subjectId: action.agentId,
+            decision: verificationResult.isValid ? 'allow' : 'deny',
+            complianceTags: ['enforcement', 'token'],
+            details: {
+                isValid: verificationResult.isValid,
+                reason: verificationResult.reason,
+                trustChainStatus: verificationResult.trustChainStatus
+            }
+        });
 
         if (!verificationResult.isValid) {
             anomalies.push({
@@ -68,7 +94,7 @@ export class SecurityEnforcementLayer {
         }
 
         // 2. Validate Action against Authority Graph
-        const validationResult = this.validationEngine.validateAction(action, authorityGraph);
+        const validationResult = this.validationEngine.validateAction(action, authorityGraph, { traceId });
 
         // 3. Detect Anomalies
         this.detectAnomalies(action, token, validationResult, anomalies);
@@ -77,9 +103,29 @@ export class SecurityEnforcementLayer {
         // Use a strict blocking policy: any critical or high anomaly blocks execution.
         const hasBlockingAnomaly = anomalies.some(a => a.severity === 'critical' || a.severity === 'high');
         const allowed = validationResult.authorized && verificationResult.isValid && !hasBlockingAnomaly;
-
         // 5. Audit Logging
         const auditLogId = this.logEvent(action, token, verificationResult, validationResult, anomalies, allowed);
+        this.auditTraceEngine?.recordEvent({
+            traceId,
+            domain: 'enforcement_decision',
+            type: 'enforcement_result',
+            actorId: action.agentId,
+            subjectId: action.agentId,
+            entityId: auditLogId,
+            decision: allowed ? 'allow' : 'deny',
+            complianceTags: ['enforcement'],
+            details: {
+                auditLogId,
+                anomalyCount: anomalies.length,
+                anomalies: anomalies.map((anomaly) => ({
+                    type: anomaly.type,
+                    severity: anomaly.severity,
+                    message: anomaly.message
+                })),
+                validationAuthorized: validationResult.authorized,
+                tokenValid: verificationResult.isValid
+            }
+        });
 
         if (!allowed) {
             this.blockExecution(action, anomalies, auditLogId);
@@ -203,5 +249,9 @@ export class SecurityEnforcementLayer {
 
     public getAuditLogs() {
         return this.auditLogs;
+    }
+
+    public getAuditTraceEngine(): AuditTraceEngine | undefined {
+        return this.auditTraceEngine;
     }
 }

@@ -3,6 +3,7 @@ import {
     AuthorityPolicyEffect,
     DelegatedPermission
 } from './AuthorityGraphBuilder';
+import { AuditTraceEngine } from './AuditTraceEngine';
 
 export interface DelegationScopeBoundary {
     resources: string[];
@@ -74,6 +75,7 @@ export interface DelegationControlModuleOptions {
     now?: () => number;
     maxDelegationTtlMs?: number;
     maxDelegationChainDepth?: number;
+    auditTraceEngine?: AuditTraceEngine;
 }
 
 interface DelegationQuery {
@@ -94,11 +96,13 @@ export class DelegationControlModule {
     private readonly now: () => number;
     private readonly maxDelegationTtlMs: number;
     private readonly maxDelegationChainDepth: number;
+    private readonly auditTraceEngine?: AuditTraceEngine;
 
     constructor(options: DelegationControlModuleOptions = {}) {
         this.now = options.now ?? (() => Date.now());
         this.maxDelegationTtlMs = options.maxDelegationTtlMs ?? 30 * 24 * 60 * 60 * 1000;
         this.maxDelegationChainDepth = options.maxDelegationChainDepth ?? 8;
+        this.auditTraceEngine = options.auditTraceEngine;
     }
 
     public createDelegation(
@@ -495,6 +499,39 @@ export class DelegationControlModule {
             actorId: input.actorId,
             details: input.details
         });
+
+        if (this.auditTraceEngine) {
+            const traceId =
+                input.delegationId !== undefined
+                    ? `delegation_${input.delegationId}`
+                    : `delegation_actor_${input.actorId ?? 'system'}`;
+            this.auditTraceEngine.startTrace({
+                traceId,
+                correlationRef: input.delegationId,
+                metadata: {
+                    delegationId: input.delegationId,
+                    actorId: input.actorId
+                }
+            });
+            this.auditTraceEngine.recordEvent({
+                traceId,
+                domain: 'delegation_event',
+                type,
+                actorId: input.actorId,
+                subjectId: input.delegationId,
+                entityId: input.delegationId,
+                decision:
+                    type === 'delegation_denied'
+                        ? 'deny'
+                        : type === 'delegation_created'
+                            ? 'allow'
+                            : type === 'delegation_revoked'
+                                ? 'rejected'
+                                : 'none',
+                complianceTags: ['delegation'],
+                details: { ...input.details }
+            });
+        }
     }
 
     private newId(prefix: string): string {

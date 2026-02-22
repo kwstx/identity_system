@@ -14,11 +14,13 @@ import {
     ApprovalWorkflowStepDefinition,
     DomainApproverConfig
 } from './ApprovalRoutingTypes';
+import { AuditTraceEngine } from './AuditTraceEngine';
 
 interface ApprovalRoutingEngineOptions {
     orgGraph: OrganizationalGraphEngine;
     rules?: ApprovalRoutingRule[];
     domainApprovers?: Partial<Record<ApprovalDomain, DomainApproverConfig>>;
+    auditTraceEngine?: AuditTraceEngine;
 }
 
 interface RouteRequestInput {
@@ -40,6 +42,7 @@ export class ApprovalRoutingEngine {
     private readonly rules: ApprovalRoutingRule[];
     private readonly domainApprovers: Partial<Record<ApprovalDomain, DomainApproverConfig>>;
     private readonly routes = new Map<string, ApprovalRoute>();
+    private readonly auditTraceEngine?: AuditTraceEngine;
 
     constructor(options: ApprovalRoutingEngineOptions) {
         this.orgGraph = options.orgGraph;
@@ -47,6 +50,7 @@ export class ApprovalRoutingEngine {
             (a, b) => (b.priority ?? 0) - (a.priority ?? 0)
         );
         this.domainApprovers = options.domainApprovers ?? {};
+        this.auditTraceEngine = options.auditTraceEngine;
     }
 
     public routeRequest(input: RouteRequestInput): ApprovalRoutingResult {
@@ -141,6 +145,38 @@ export class ApprovalRoutingEngine {
         };
 
         this.routes.set(routeId, route);
+        this.auditTraceEngine?.startTrace({
+            traceId,
+            correlationRef: routeId,
+            metadata: {
+                routeId,
+                agentId: action.agentId,
+                action: action.action,
+                resource: action.resource
+            }
+        });
+        this.auditTraceEngine?.recordEvent({
+            traceId,
+            domain: 'approval_path',
+            type: 'route_created',
+            actorId: action.agentId,
+            subjectId: action.agentId,
+            entityId: routeId,
+            decision: 'requires_approval',
+            complianceTags: ['approval'],
+            details: {
+                domains: requestedDomains,
+                reasons: route.reasons,
+                workflow,
+                steps: route.steps.map((step) => ({
+                    stepId: step.stepId,
+                    domains: step.domains,
+                    approverIds: step.approverIds,
+                    status: step.status,
+                    decisionPolicy: step.decisionPolicy
+                }))
+            }
+        });
         return {
             requiresApproval: true,
             route: this.cloneRoute(route)
@@ -185,6 +221,20 @@ export class ApprovalRoutingEngine {
                     timestamp: input.timestamp
                 })
             );
+            this.auditTraceEngine?.recordEvent({
+                traceId: route.traceId,
+                domain: 'approval_path',
+                type: 'approver_decision',
+                actorId: input.approverId,
+                subjectId: route.requestRef.agentId,
+                entityId: route.routeId,
+                decision: 'approved',
+                complianceTags: ['approval'],
+                details: {
+                    stepId: step.stepId,
+                    approved: true
+                }
+            });
         } else {
             if (!step.rejectedBy.includes(input.approverId)) {
                 step.rejectedBy.push(input.approverId);
@@ -207,6 +257,33 @@ export class ApprovalRoutingEngine {
                     message: `Step '${step.stepId}' rejected. Route rejected.`
                 })
             );
+            this.auditTraceEngine?.recordEvent({
+                traceId: route.traceId,
+                domain: 'approval_path',
+                type: 'approver_decision',
+                actorId: input.approverId,
+                subjectId: route.requestRef.agentId,
+                entityId: route.routeId,
+                decision: 'rejected',
+                complianceTags: ['approval'],
+                details: {
+                    stepId: step.stepId,
+                    approved: false
+                }
+            });
+            this.auditTraceEngine?.recordEvent({
+                traceId: route.traceId,
+                domain: 'approval_path',
+                type: 'route_rejected',
+                actorId: input.approverId,
+                subjectId: route.requestRef.agentId,
+                entityId: route.routeId,
+                decision: 'rejected',
+                complianceTags: ['approval'],
+                details: {
+                    stepId: step.stepId
+                }
+            });
             return this.cloneRoute(route);
         }
 
@@ -220,10 +297,36 @@ export class ApprovalRoutingEngine {
                 })
             );
             this.unlockDependentSteps(route, step.stepId);
+            this.auditTraceEngine?.recordEvent({
+                traceId: route.traceId,
+                domain: 'approval_path',
+                type: 'step_approved',
+                actorId: input.approverId,
+                subjectId: route.requestRef.agentId,
+                entityId: route.routeId,
+                decision: 'approved',
+                complianceTags: ['approval'],
+                details: {
+                    stepId: step.stepId
+                }
+            });
         }
 
         if (route.steps.every((candidate) => candidate.status === 'approved')) {
             route.status = 'approved';
+            this.auditTraceEngine?.recordEvent({
+                traceId: route.traceId,
+                domain: 'approval_path',
+                type: 'route_approved',
+                actorId: input.approverId,
+                subjectId: route.requestRef.agentId,
+                entityId: route.routeId,
+                decision: 'approved',
+                complianceTags: ['approval'],
+                details: {
+                    routeId: route.routeId
+                }
+            });
         }
 
         return this.cloneRoute(route);
