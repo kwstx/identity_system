@@ -41,6 +41,7 @@ export class SecurityEnforcementLayer {
     /**
      * Enforces security policies on an incoming action.
      * This is the final gateway before execution.
+     * @returns The outcome including whether execution is allowed.
      */
     public enforce(
         action: AgentAction,
@@ -80,6 +81,10 @@ export class SecurityEnforcementLayer {
         // 5. Audit Logging
         const auditLogId = this.logEvent(action, token, verificationResult, validationResult, anomalies, allowed);
 
+        if (!allowed) {
+            this.blockExecution(action, anomalies, auditLogId);
+        }
+
         return {
             allowed,
             anomalies,
@@ -87,6 +92,19 @@ export class SecurityEnforcementLayer {
             auditLogId,
             timestamp
         };
+    }
+
+    /**
+     * Explicitly blocks execution and records the blockage.
+     */
+    private blockExecution(action: AgentAction, anomalies: EnforcementAnomaly[], logId: string): void {
+        const primaryAnomaly = anomalies.sort((a, b) => b.severity.localeCompare(a.severity))[0];
+        const reason = primaryAnomaly ? primaryAnomaly.message : 'Unauthorized action';
+
+        console.error(`[SECURITY BLOCK] Execution blocked for ${action.agentId} on ${action.resource}. Reason: ${reason}. (Log: ${logId})`);
+
+        // In a real system, this might throw a specialized SecurityException
+        // or signal a middleware to halt.
     }
 
     private detectAnomalies(

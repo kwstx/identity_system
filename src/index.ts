@@ -1,5 +1,6 @@
 export * from './types';
 export * from './AuthorityGraphBuilder';
+export * from './ContextAdaptationEngine';
 export * from './ApprovalRoutingEngine';
 export * from './ApprovalRoutingTypes';
 export {
@@ -39,3 +40,11 @@ export {
 export * from './VerificationProtocolTypes';
 export { AuthorityVerificationProtocol } from './AuthorityVerificationProtocol';
 export { CryptoUtils } from './crypto';
+export * from './ActionValidationTypes';
+export { ActionValidationEngine } from './ActionValidationEngine';
+export {
+    SecurityEnforcementLayer,
+    EnforcementResult,
+    EnforcementAnomaly,
+    SecurityEnforcementOptions
+} from './SecurityEnforcementLayer';
