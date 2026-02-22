@@ -53,3 +53,9 @@ export {
     EnforcementAnomaly,
     SecurityEnforcementOptions
 } from './SecurityEnforcementLayer';
+export { AgentIdentityCore } from './AgentIdentityCore';
+export {
+    IdentityAuthorityAPI,
+    IdentityAuthorityAPIOptions
+} from './IdentityAuthorityAPI';
+export * from './IdentityAuthorityAPITypes';

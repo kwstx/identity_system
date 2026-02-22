@@ -16,20 +16,20 @@ import {
 } from './ApprovalRoutingTypes';
 import { AuditTraceEngine } from './AuditTraceEngine';
 
-interface ApprovalRoutingEngineOptions {
+export interface ApprovalRoutingEngineOptions {
     orgGraph: OrganizationalGraphEngine;
     rules?: ApprovalRoutingRule[];
     domainApprovers?: Partial<Record<ApprovalDomain, DomainApproverConfig>>;
     auditTraceEngine?: AuditTraceEngine;
 }
 
-interface RouteRequestInput {
+export interface RouteRequestInput {
     action: AgentAction;
     authorityGraph: AuthorityGraph;
     traceId?: string;
 }
 
-interface SubmitApprovalDecisionInput {
+export interface SubmitApprovalDecisionInput {
     routeId: string;
     stepId: string;
     approverId: string;
