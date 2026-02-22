@@ -26,6 +26,8 @@ export interface DelegatedPermission extends AuthorityPolicy {
     granteeAgentId: string;
     issuedAt: number;
     expiresAt?: number;
+    parentDelegationId?: string;
+    delegationChain?: string[];
 }
 
 export interface OrganizationalGraphData {
@@ -354,7 +356,7 @@ export class AuthorityGraphBuilder {
             nodes.push({
                 id: `delegation:${delegation.delegationId}`,
                 type: 'delegation',
-                label: delegation.delegationId
+                label: `${delegation.delegationId} (${delegation.grantorId} -> ${delegation.granteeAgentId})`
             });
         }
 
@@ -404,10 +406,22 @@ export class AuthorityGraphBuilder {
                 continue;
             }
             edges.push({
+                from: `agent:${delegation.grantorId}`,
+                to: `delegation:${delegation.delegationId}`,
+                relation: 'delegates'
+            });
+            edges.push({
                 from: `delegation:${delegation.delegationId}`,
                 to: `agent:${input.identity.agentId}`,
                 relation: 'delegated_to'
             });
+            if (delegation.parentDelegationId) {
+                edges.push({
+                    from: `delegation:${delegation.parentDelegationId}`,
+                    to: `delegation:${delegation.delegationId}`,
+                    relation: 'delegation_chain'
+                });
+            }
         }
 
         return this.uniqueBy(

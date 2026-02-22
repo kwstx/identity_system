@@ -219,24 +219,26 @@ export class DelegationControlModule {
                 }
             });
 
-            result.push({
-                delegationId: delegation.delegationId,
-                grantorId: delegation.grantorAgentId,
-                granteeAgentId: delegation.granteeAgentId,
-                issuedAt: delegation.createdAt,
-                expiresAt: delegation.expiresAt,
-                resource: delegation.scope.resources[0] ?? '*',
-                actions: delegation.scope.actions.length > 0 ? [...delegation.scope.actions] : ['*'],
-                effect: delegation.effect,
-                reason: delegation.reason,
-                constraints: {
-                    ...(delegation.scope.constraints ?? {}),
+            for (const resource of delegation.scope.resources) {
+                result.push({
+                    delegationId: delegation.delegationId,
+                    grantorId: delegation.grantorAgentId,
+                    granteeAgentId: delegation.granteeAgentId,
+                    issuedAt: delegation.createdAt,
+                    expiresAt: delegation.expiresAt,
+                    resource,
+                    actions: delegation.scope.actions.length > 0 ? [...delegation.scope.actions] : ['*'],
+                    effect: delegation.effect,
+                    reason: delegation.reason,
+                    constraints: {
+                        ...(delegation.scope.constraints ?? {}),
+                        delegationChain: [...delegation.chain]
+                    },
+                    condition: this.toAuthorityCondition(delegation.contextRestriction),
+                    parentDelegationId: delegation.parentDelegationId,
                     delegationChain: [...delegation.chain]
-                },
-                condition: this.toAuthorityCondition(delegation.contextRestriction),
-                parentDelegationId: delegation.parentDelegationId,
-                delegationChain: [...delegation.chain]
-            });
+                });
+            }
         }
 
         return result;
@@ -349,6 +351,22 @@ export class DelegationControlModule {
             }
             if (parent.expiresAt !== undefined && (!expiresAt || expiresAt > parent.expiresAt)) {
                 return { valid: false, reason: 'Child delegation cannot outlive parent delegation' };
+            }
+            for (const resource of request.scope.resources) {
+                const resourceCovered = parent.scope.resources.some((pattern) =>
+                    this.matchesPattern(resource, pattern)
+                );
+                if (!resourceCovered) {
+                    return { valid: false, reason: `Child delegation resource exceeds parent scope: ${resource}` };
+                }
+            }
+            for (const action of request.scope.actions) {
+                const actionCovered = parent.scope.actions.some((pattern) =>
+                    this.matchesPattern(action, pattern)
+                );
+                if (!actionCovered) {
+                    return { valid: false, reason: `Child delegation action exceeds parent scope: ${action}` };
+                }
             }
         }
 
